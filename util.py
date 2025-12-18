@@ -38,10 +38,10 @@ def dice_score_multiclass(y_pred, y_true, smooth=1e-6, bg=False, ignore_index=25
     """
     Robust Dice Score for High Cardinality Classes (e.g., 22 classes)
     """
-    with torch.no_grad(): # 評估模式，節省記憶體
+    with torch.no_grad(): 
         y_pred_idx = torch.argmax(y_pred, dim=1)
         
-        # 1. 處理 Ignore Index (避免 one_hot 報錯，也避免干擾計算)
+        # 1. Process Ignore Index
         valid_mask = (y_true != ignore_index)
         y_pred_idx = y_pred_idx[valid_mask]
         y_true = y_true[valid_mask]
@@ -51,24 +51,23 @@ def dice_score_multiclass(y_pred, y_true, smooth=1e-6, bg=False, ignore_index=25
         foreground_scores = [] 
 
         for i in range(C):
-            # 2. 使用布林運算代替 One-hot (節省 22 倍的顯存擴張)
-            # p 和 t 都是 1D boolean tensor
+            # p and t are 1D boolean tensor
             p_mask = (y_pred_idx == i)
             t_mask = (y_true == i)
 
             intersection = (p_mask & t_mask).sum().float()
             union = p_mask.sum() + t_mask.sum()
 
-            # 3. 修正邏輯：直接處理 score，不依賴 dice 變數型態
+
             if union == 0:
-                score = 1.0 # 雙方都為空，視為完美預測
+                score = 1.0 # pred and GT are 0，perfect !
             else:
                 dice = (2 * intersection + smooth) / (union + smooth)
-                score = dice.item() # 只有在這裡才 call .item()
+                score = dice.item() # call .item()
 
             results[f"Dice_Class_{i}"] = score
 
-            # 4. mDice 邏輯
+            # 4. mDice 
             if i > 0:
                 foreground_scores.append(score)
             elif i == 0 and bg:
@@ -79,56 +78,6 @@ def dice_score_multiclass(y_pred, y_true, smooth=1e-6, bg=False, ignore_index=25
         else:
             results["mDice"] = 0.0
     return results
-
-# def dice_score_multiclass(y_pred, y_true, smooth=1e-6, bg = False):
-#     """
-#     y_pred: [B, C, H, W] (Logits)
-#     y_true: [B, H, W] (Integers 0..C-1)
-#     """
-#     y_pred_idx = torch.argmax(y_pred, dim=1)  # [B, H, W]
-
-#     # One-hot
-#     C = y_pred.shape[1]
-#     y_pred_1hot = F.one_hot(y_pred_idx, C).permute(0, 3, 1, 2).float()
-#     y_true_1hot = F.one_hot(y_true, C).permute(0, 3, 1, 2).float()
-
-#     results = {}
-#     foreground_scores = [] # 用來存暫存 Class 1, 2... 的分數
-
-#     for i in range(C):
-#         p = y_pred_1hot[:, i].contiguous().view(-1)
-#         t = y_true_1hot[:, i].contiguous().view(-1)
-
-#         intersection = (p * t).sum()
-#         union = p.sum() + t.sum()
-        
-#         dice = (2 * intersection + smooth) / (union + smooth)
-
-#         # --- 處理特殊情況 ---
-#         if union == 0:
-#             # 如果真值沒有，預測也沒有 -> 預測完全正確 -> 給 1.0 分
-#             dice = 1.0
-#         else:
-#             dice = (2 * intersection + smooth) / (union + smooth)
-
-#         score = dice.item()
-        
-#         # 存入所有類別的詳細分數
-#         results[f"Dice_Class_{i}"] = score
-        
-#         # 4. 關鍵邏輯：如果是背景 (i==0)，就不加入平均列表
-#         if i > 0 :
-#             foreground_scores.append(score)
-#         if i == 0 and bg :
-#             foreground_scores.append(score)
-
-#     # 5. 計算 mDice (只平均前景)
-#     if len(foreground_scores) > 0:
-#         results["mDice"] = sum(foreground_scores) / len(foreground_scores)
-#     else:
-#         results["mDice"] = 0.0
-
-#     return results
 
 
 
@@ -144,7 +93,7 @@ def iou_multiclass(y_pred, y_true,smooth=1e-6,bg =False):
     class_ious = {}
     foreground_ious = []
     for i in range(C):
-        # 展平為一維向量計算 (Global Batch IoU)
+        # Flatten Global Batch IoU
         p = y_pred_1hot[:, i].contiguous().view(-1)
         t = y_true_1hot[:, i].contiguous().view(-1)
 
@@ -160,9 +109,8 @@ def iou_multiclass(y_pred, y_true,smooth=1e-6,bg =False):
 
         class_ious[f"class_{i}_iou"] = iou
 
-    # 4. 計算 mIoU (Mean IoU)
-    # 通常學術界看 mIoU 會排除背景 (Class 0)，只看病灶 (Class 1, 2...)
-    # 假設 Class 0 是背景
+    # 4. Compute mIoU (Mean IoU)
+    # Suppose Class 0 is background
     if not bg:
         foreground_ious = [v for k, v in class_ious.items() if "class_0" not in k]
     elif bg:
@@ -215,20 +163,20 @@ def visualize_prediction(model, dataloader, device, num_samples=3):
     
     with torch.no_grad():
         logits = model(inputs)
-        preds = torch.argmax(logits, dim=1) # 轉成 [B, H, W] 的類別圖
+        preds = torch.argmax(logits, dim=1) # [B, H, W]
         
-    # 轉回 CPU 方便畫圖
+    # Turn to CPU
     inputs = inputs.cpu()
     targets = targets.cpu()
     preds = preds.cpu()
     
-    # 畫圖
+    # Plot
     fig, axes = plt.subplots(num_samples, 3, figsize=(12, 4*num_samples))
     for i in range(num_samples):
-        # 原圖 (需反正規化如果之前有做 Normalize)
-        # 這裡假設 inputs 是 [C, H, W]
+        # Original figure
+        # Suppose inputs is [C, H, W]
         img = inputs[i].permute(1, 2, 0).numpy()
-        # 簡單處理顯示範圍
+        # Process range
         img = (img - img.min()) / (img.max() - img.min())
         
         axes[i, 0].imshow(img)
@@ -251,7 +199,7 @@ def display_test_sample(model, test_input, test_target, device):
     test_input, test_target = test_input.to(device), test_target.to(device)
 
     # ---------------------------------------------------
-    # 1. 取得模型預測：多類 segmentation → softmax + argmax
+    # 1. Get model prediction：Multi-class segmentation → softmax + argmax
     # ---------------------------------------------------
     with torch.no_grad():
         logits = model(test_input)
@@ -297,7 +245,7 @@ def display_test_sample(model, test_input, test_target, device):
     plt.show()
 
     # ---------------------------------------------------
-    # 5. Overlay 版本
+    # 5. Overlay Version
     # ---------------------------------------------------
     plt.figure(figsize=(12,6))
 
@@ -320,33 +268,33 @@ import matplotlib.pyplot as plt
 def show_class_mapping(dataset, index=0):
     image, mask = dataset[index]
     
-    # 轉換格式以利顯示
+    # Change format
     if hasattr(image, 'permute'):
         image = image.permute(1, 2, 0).numpy() # (C, H, W) -> (H, W, C)
     if hasattr(mask, 'numpy'):
         mask = mask.numpy()
 
-    # 針對三個類別分別顯示
+    # show for three class
     fig, ax = plt.subplots(1, 4, figsize=(20, 5))
     
-    # 原圖
+    # Original figure 
     ax[0].imshow(image)
     ax[0].set_title("Original Image")
     
-    # Class 0 (通常是背景)
+    # Class 0 ( Usually background )
     ax[1].imshow(mask == 0, cmap='gray')
     ax[1].set_title("Class 0 (Background?)")
     
-    # Class 1 (通常是腫瘤 - 看起來細胞核密集、顏色深)
+    # Class 1 
     ax[2].imshow(mask == 1, cmap='gray')
     ax[2].set_title("Class 1 (Tumor?)")
     
-    # Class 2 (通常是基質 - 看起來粉紅、纖維狀)
+    # Class 2 
     ax[3].imshow(mask == 2, cmap='gray')
     ax[3].set_title("Class 2 (Stroma?)")
     
     plt.show()
 
-# 執行視覺化
+
 ### Use
-# show_class_mapping(train_dataset, index=833) # 可以多試幾個 index
+# show_class_mapping(train_dataset, index=433)

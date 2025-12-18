@@ -43,14 +43,14 @@ def create_dataset(train_image_path = 'archive/BCSS/train/', val_image_path = 'a
     file_names = [f for f in os.listdir(train_dir) if f.endswith('.png')]
     df = pd.DataFrame({'filename': file_names})
 
-    # 2. Analyze Patient ID (關鍵步驟)
-    # BCSS 的檔名通常源自 TCGA，formate like: "TCGA-AR-A1AS-01Z-00-DX1.png"
-    # 我們需要取前幾個區段作為 Group ID (通常前三個區段代表一位病患)
-    # 例如: TCGA-AR-A1AS
+    # 2. Analyze Patient ID 
+    # BCSS file name from TCGA，formate like: "TCGA-AR-A1AS-01Z-00-DX1.png"
+    # We need get the first few section as Group ID (Usually first three section as one patient)
+    # Ex: TCGA-AR-A1AS
     df['patient_id'] = df['filename'].apply(lambda x: "-".join(x.split('-')[:3]))
 
-    # 3. 進行 Group Split (依病患分組，而非依圖片)
-    # test_size=0.1 表示切 10% 出來當作新的 Validation
+    # 3. Group Split (Splitting based on patient , not only image)
+    # 10% for Validation from Original Training dataset
     gss = GroupShuffleSplit(n_splits=1, test_size=0.1, random_state=33)
 
     train_idx, val_idx = next(gss.split(df, groups=df['patient_id']))
@@ -58,14 +58,14 @@ def create_dataset(train_image_path = 'archive/BCSS/train/', val_image_path = 'a
     train_df = df.iloc[train_idx]
     val_df = df.iloc[val_idx]
 
-    # 4. 驗證拆分結果
+    # 4. Check the validation result
     print("-" * 30)
-    print(f"New Train 數量: {len(train_df)} (包含 {train_df['patient_id'].nunique()} 位病患)")
-    print(f"New Valid 數量: {len(val_df)} (包含 {val_df['patient_id'].nunique()} 位病患)")
+    print(f"New Train counts: {len(train_df)} (Include {train_df['patient_id'].nunique()} patients)")
+    print(f"New Valid counts: {len(val_df)} (Include {val_df['patient_id'].nunique()} patients)")
 
-    # 確保沒有重疊
+    # Check no over lap
     overlap = set(train_df['patient_id']) & set(val_df['patient_id'])
-    print(f"病患重疊數: {len(overlap)} (必須為 0)")
+    print(f"The counts of duplicate patients: {len(overlap)} (Must be 0 !!!)")
 
 
     train_imgs_list = train_df['filename'].to_list()

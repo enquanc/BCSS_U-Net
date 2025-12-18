@@ -16,8 +16,8 @@ def train_model(model, train_dataloader, val_dataloader, config, verbose=True, l
     n_epochs = config['n_epochs']
     learning_rate = config['learning_rate']
     lr_decay_factor = config['lr_decay_factor']
-    save_dir = config['save_dir']   # <--- 確保從 config 讀取存檔路徑
-    model_name = config['model']    # <--- 讀取模型名稱
+    save_dir = config['save_dir']   # <--- save path
+    model_name = config['model']    # <--- model name
 
     model.to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay = 1e-4)
@@ -29,10 +29,10 @@ def train_model(model, train_dataloader, val_dataloader, config, verbose=True, l
 
     history = {
             'train_ce_loss': [], 'train_dice_loss': [],'train_total_loss': [],
-            'val_ce_loss': [], 'val_dice_loss': [],'val_total_loss': [],  'val_mDice': [] # 新增 mDice
+            'val_ce_loss': [], 'val_dice_loss': [],'val_total_loss': [],  'val_mDice': [] # mDice
         }
     
-    best_val_loss = float('inf')  # <--- 新增：記錄最佳 Loss
+    best_val_loss = float('inf')  
 
     print("Starting Training...")
     for epoch in tqdm(range(1, n_epochs + 1)):
@@ -70,7 +70,7 @@ def train_model(model, train_dataloader, val_dataloader, config, verbose=True, l
 
             train_loop.set_postfix(loss=total_loss.item())
 
-        # 計算該 Epoch 平均 Loss
+        # Compute Epoch average Loss
         avg_train_ce_loss = train_running_loss / len(train_dataloader)
         avg_train_dice_loss = train_running_dice_loss / len(train_dataloader)
         avg_train_total_loss = avg_train_ce_loss + avg_train_dice_loss
@@ -106,7 +106,7 @@ def train_model(model, train_dataloader, val_dataloader, config, verbose=True, l
 
         avg_val_ce_loss = val_running_loss / len(val_dataloader)
         avg_val_dice_loss = val_running_dice_loss / len(val_dataloader)
-        avg_val_mDice = val_running_mDice / len(val_dataloader) # 算出平均 mDice
+        avg_val_mDice = val_running_mDice / len(val_dataloader) #  Compute mDice
         avg_val_total_loss = avg_val_ce_loss + avg_val_dice_loss
 
         history['val_ce_loss'].append(avg_val_ce_loss)
@@ -114,34 +114,31 @@ def train_model(model, train_dataloader, val_dataloader, config, verbose=True, l
         history['val_total_loss'].append(avg_val_total_loss)
         history['val_mDice'].append(avg_val_mDice)
 
-        # ----------------------
-        # Save Best Model Logic (關鍵修改)
-        # ----------------------
+
+        # Save Best Model
+
         if not os.path.exists(save_dir):
             os.makedirs(save_dir, exist_ok=True)
 
-        # 判斷是否為「目前為止最好」的模型
+        # Judge best model or not
         if avg_val_total_loss < best_val_loss:
             print(f"Epoch {epoch}: Validation Loss improved from {best_val_loss:.4f} to {avg_val_total_loss:.4f}. Saving best model...")
             best_val_loss = avg_val_total_loss
             
-            # 儲存最佳模型，通常命名為 best_model.pth 或加上 _best
+            # Save best model, Usually name with '_best'
             best_model_path = os.path.join(save_dir, f"{model_name}_best.pth")
             
-            # 使用 torch.save 或你原本的 save_model 函數
-            # 這裡假設你的 save_model 接受 (model, path)
-            # 如果 save_model 是自定義函數，確保它是存 state_dict
+            # save model
             try:
                 save_model(model, best_model_path) 
             except NameError:
-                # 備用方案：直接用 torch 保存
                 torch.save(model.state_dict(), best_model_path)
 
         # ----------------------
         # Scheduler Step & Logging
         # ----------------------
         current_lr = optimizer.param_groups[0]['lr']
-        # 讓 Scheduler 根據 Val Loss 決定要不要降 LR
+        # Let Scheduler choose LR based on  Val Loss
         scheduler.step(avg_val_total_loss)
 
         if verbose:
@@ -160,7 +157,7 @@ if __name__ =='__main__':
 
     parser = argparse.ArgumentParser(description='Train the model')
 
-    # 1. Device (通常預設自動偵測，但也允許手動指定 'cuda:1' 等)
+    # 1. Device
     default_device = 'cuda' if torch.cuda.is_available() else 'cpu'
     parser.add_argument('--device', type=str, default=default_device, help='Device to use (cuda/cpu)')
 
@@ -171,7 +168,7 @@ if __name__ =='__main__':
     parser.add_argument('--lr_decay_factor', type=float, default=0.85, help='Factor for learning rate decay')
     parser.add_argument('--model', type=str, default='Unet', help='Select which model')
 
-    # 3. 其他常見的參數 (建議一併加上)
+    # 3. Other setting
     parser.add_argument('--save_dir', type=str, default='./checkpoints/', help='Directory to save models')
     # parser.add_argument('--num_workers', type=int, default=4, help='Number of workers for DataLoader')
     parser.add_argument('--output_channels', type=int, default=3, help='Number of output channels')
@@ -187,9 +184,6 @@ if __name__ =='__main__':
                 train_dataset, val_dataset, test_dataset = create_dataset(train_image_path = 'dataset/archive/BCSS_512/train_512/', val_image_path = 'dataset/archive/BCSS_512/val_512/', test_image_path = 'dataset/archive/BCSS/test/',
                         train_mask_path = 'dataset/archive/BCSS_512/train_mask_512/', val_mask_path = 'dataset/archive/BCSS_512/val_mask_512/') 
 
-    # train_dataset, val_dataset, test_dataset = create_dataset(train_image_path = 'archive/BCSS/train/', val_image_path = 'archive/BCSS/val/', test_image_path = 'archive/BCSS/test/',
-    #                   train_mask_path = 'archive/BCSS/train_mask/', val_mask_path = 'archive/BCSS/val_mask/') 
-    
 
     if train_config['model'] =='Unet':
         # Create UNet model and count params
