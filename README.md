@@ -41,7 +41,9 @@ pip install "opencv-python-headless==4.7.0.72"
 ```
 
 ## 🚀 Usage
-Replace cuda:x with your specific GPU ID (e.g., cuda:0).  Please Check dataset path.
+Replace cuda:x with your specific GPU ID (e.g., cuda:0).  
+
+Please Check dataset path first.
 
 ### Training
 Option A: 3 Classes
