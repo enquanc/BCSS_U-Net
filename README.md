@@ -23,10 +23,12 @@ docker run --gpus all -itd \
 # Enter the container
 docker exec -it BCSS_DL /bin/bash
 (Note: Please adjust the volume paths /DATA2/user/... according to your local machine configuration.)
+```
 
 ### 2. Dependencies
 Install the required Python packages inside the container:
 
+```bash
 # Basic utilities
 pip install h5py numpy==1.26.0 numba==0.62.1 albumentations==1.3.1
 
@@ -36,7 +38,7 @@ pip install torch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 --index-url [http
 # OpenCV (Headless version for server environments)
 pip uninstall opencv opencv-python opencv-python-headless -y
 pip install "opencv-python-headless==4.7.0.72"
-
+```
 
 ## 🚀 Usage
 Replace cuda:x with your specific GPU ID (e.g., cuda:0).
@@ -44,6 +46,7 @@ Please Check dataset path.
 
 ### Training
 Option A: 3 Classes
+```bash
 # Train U-Net
 python train.py --n_epochs 50 --batch_size 32 --learning_rate 1e-3 --lr_decay_factor 0.7 \
     --model Unet --save_dir ./checkpoints/wd-2/1217_64n --n_filters 64 --device cuda:x
@@ -51,9 +54,10 @@ python train.py --n_epochs 50 --batch_size 32 --learning_rate 1e-3 --lr_decay_fa
 # Train Attention U-Net
 python train.py --n_epochs 50 --batch_size 32 --learning_rate 1e-3 --lr_decay_factor 0.7 \
     --model Attention-Unet --save_dir ./checkpoints/wd-2/1217_64n --n_filters 64 --device cuda:x
-
+```
 
 Option B: 22 Classes
+```bash
 # Train U-Net
 python train.py --n_epochs 50 --batch_size 16 --learning_rate 1e-3 --lr_decay_factor 0.7 \
     --model Unet --save_dir ./checkpoints/512/wd-2/1217_64n \
@@ -63,17 +67,21 @@ python train.py --n_epochs 50 --batch_size 16 --learning_rate 1e-3 --lr_decay_fa
 python train.py --n_epochs 50 --batch_size 4 --learning_rate 1e-3 --lr_decay_factor 0.7 \
     --model Attention-Unet --save_dir ./checkpoints/512/wd-2/1217_64n \
     --n_filters 64 --output_channels 22 --device cuda:x
-
+```
 
 ### Testing
 Make sure the checkpoint paths (--ckpt) exist before running.
 Option A: 3 Classes
+```bash
 python test.py --model Unet --ckpt "checkpoints/Unet-weights.pth" --device cuda:1 --n_filter 32
 python test.py --model Attention-Unet --ckpt "checkpoints/Attention-Unet-weights.pth" --device cuda:1 --n_filter 32
+```
 
 Option B: 22 Classes
+```bash
 python test.py --model Unet --ckpt "checkpoints/512/Unet-weights.pth" \
     --device cuda:1 --out_channels 22 --n_filter 32
 
 python test.py --model Attention-Unet --ckpt "checkpoints/512/Attention-Unet-weights.pth" \
     --device cuda:1 --out_channels 22 --n_filter 32
+```
